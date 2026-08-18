@@ -40,6 +40,7 @@ class Task:
     steps: List[Step] = field(default_factory=list)
     output: Optional[Dict[str, Any]] = None
     errors: List[str] = field(default_factory=list)
+    context: Dict[str, Any] = field(default_factory=dict)
 
 
 class Planner:
@@ -70,7 +71,7 @@ class Validator:
         if not isinstance(result, dict):
             return {"ok": False, "errors": ["A saída deve ser um objeto estruturado."]}
 
-        required = {"summary", "items", "sources", "human_review_required", "status"}
+        required = {"summary", "items", "sources", "missing_information", "human_review_required", "status"}
         missing = sorted(required - set(result))
         if missing:
             errors.append(f"Campos obrigatórios ausentes: {', '.join(missing)}.")
@@ -83,11 +84,13 @@ class Validator:
                 if not isinstance(item, dict):
                     errors.append(f"O item {index} não é um objeto estruturado.")
                     continue
-                for field in ("id", "description", "responsible", "status"):
+                for field in ("id", "description", "responsible", "status", "source_section", "evidence"):
                     if field not in item or not str(item[field]).strip():
                         errors.append(f"O item {index} não contém '{field}'.")
         if not isinstance(result.get("sources"), list):
             errors.append("O campo sources deve ser uma lista.")
+        if not isinstance(result.get("missing_information"), list):
+            errors.append("O campo missing_information deve ser uma lista.")
         if not isinstance(result.get("human_review_required"), bool):
             errors.append("human_review_required deve ser booleano.")
         if result.get("status") not in {"draft", "ready_for_review"}:
@@ -106,8 +109,8 @@ class AlentoAgent:
         self.planner = Planner()
         self.validator = Validator()
 
-    def create_task(self, goal: str, domain: str) -> Task:
-        task = Task(id=str(uuid4()), goal=goal, domain=domain)
+    def create_task(self, goal: str, domain: str, context: Optional[Dict[str, Any]] = None) -> Task:
+        task = Task(id=str(uuid4()), goal=goal, domain=domain, context=context or {})
         task.steps = self.planner.build_plan(goal, domain)
         self.audit.write("task_created", {"task_id": task.id, "domain": domain, "goal": goal})
         return task

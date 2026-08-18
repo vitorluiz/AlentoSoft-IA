@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--domain", default="general", choices=["general", "engineering", "clinical", "hr", "finance"])
     parser.add_argument("--approve", action="store_true", help="Simula aprovação humana explícita")
     parser.add_argument("--workspace", default="workspaces/demo")
+    parser.add_argument("--source-file", type=Path, help="Documento autorizado usado como fonte da skill")
     parser.add_argument(
         "--provider",
         choices=["demo", "ollama"],
@@ -36,10 +37,16 @@ def main() -> None:
     root.mkdir(parents=True, exist_ok=True)
     audit = AuditLog(root / "audit.sqlite3")
     skill = internal_policy_checklist
+    context = {}
+    if args.source_file:
+        context = {
+            "source_name": args.source_file.name,
+            "source_text": args.source_file.read_text(encoding="utf-8"),
+        }
     if args.provider == "ollama":
         skill = LLMPolicySkill(OllamaProvider())
     agent = AlentoAgent(audit_log=audit, skill=skill)
-    task = agent.create_task(goal=args.goal, domain=args.domain)
+    task = agent.create_task(goal=args.goal, domain=args.domain, context=context)
     started = time.perf_counter()
     task = agent.run(task, approval=args.approve)
     elapsed_seconds = round(time.perf_counter() - started, 3)

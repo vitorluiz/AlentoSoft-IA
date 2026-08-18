@@ -42,15 +42,16 @@ class ValidationTests(unittest.TestCase):
     def test_llm_skill_sends_schema_and_requires_review(self):
         provider = FakeProvider({
             "summary": "Checklist administrativo",
-            "items": [{"id": 1, "description": "Conferir documentos", "responsible": "RH", "status": "pending"}],
-            "sources": [],
+            "items": [{"id": 1, "description": "Conferir documentos", "responsible": "RH", "status": "pending", "source_section": "Seção 1", "evidence": "Conferir documentos."}],
+            "sources": ["fonte fictícia"],
+            "missing_information": [],
             "human_review_required": False,
             "status": "draft",
         })
         skill = LLMPolicySkill(provider)
         with tempfile.TemporaryDirectory() as directory:
             task = AlentoAgent(AuditLog(Path(directory) / "audit.sqlite3"), skill).create_task(
-                "Criar checklist", "general"
+                "Criar checklist", "general", context={"source_name": "fonte fictícia", "source_text": "Seção 1: conferir documentos."}
             )
             result = skill(task)
         self.assertEqual(provider.schema, OUTPUT_SCHEMA)

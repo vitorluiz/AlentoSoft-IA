@@ -51,6 +51,18 @@ PYTHONPATH=. python3 -m alento_soft_ia.main \
 
 O modo thinking fica desativado por padrão nas tarefas simples. Use `OLLAMA_THINK=true` somente para planeamento mais complexo e nunca como padrão em todas as chamadas. `OLLAMA_KEEP_ALIVE=10m` evita recarregar o modelo a cada tarefa durante os testes.
 
+Para testar uma skill fundamentada, forneça a política fictícia como fonte autorizada:
+
+```bash
+PYTHONPATH=. python3 -m alento_soft_ia.main \\
+  --provider ollama \\
+  --goal "Criar checklist de admissão de colaborador usando somente a política" \\
+  --domain general \\
+  --source-file examples/politicas/politica_admissao_colaborador_ficticia.md
+```
+
+A skill deve citar a seção e a evidência de cada item. Informações ausentes devem aparecer em `missing_information` e não podem ser convertidas em requisitos inventados.
+
 Para confirmar que o Ollama está disponível:
 
 ```bash

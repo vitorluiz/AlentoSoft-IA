@@ -17,12 +17,13 @@ def internal_policy_checklist(task: Task) -> Dict[str, Any]:
     return {
         "summary": f"Checklist inicial para: {task.goal}",
         "items": [
-            {"id": 1, "description": "Identificar objetivo e responsável.", "responsible": "Não informado", "status": "pending"},
-            {"id": 2, "description": "Reunir somente documentos autorizados.", "responsible": "Não informado", "status": "pending"},
-            {"id": 3, "description": "Validar campos obrigatórios e prazos.", "responsible": "Não informado", "status": "pending"},
-            {"id": 4, "description": "Registar revisão humana antes da publicação.", "responsible": "Não informado", "status": "pending"},
+            {"id": 1, "description": "Identificar objetivo e responsável.", "responsible": "Não informado", "status": "pending", "source_section": "Demonstração do protótipo", "evidence": "Regra determinística do teste."},
+            {"id": 2, "description": "Reunir somente documentos autorizados.", "responsible": "Não informado", "status": "pending", "source_section": "Demonstração do protótipo", "evidence": "Regra determinística do teste."},
+            {"id": 3, "description": "Validar campos obrigatórios e prazos.", "responsible": "Não informado", "status": "pending", "source_section": "Demonstração do protótipo", "evidence": "Regra determinística do teste."},
+            {"id": 4, "description": "Registar revisão humana antes da publicação.", "responsible": "Não informado", "status": "pending", "source_section": "Demonstração do protótipo", "evidence": "Regra determinística do teste."},
         ],
-        "sources": [],
+        "sources": ["Demonstração do protótipo"],
+        "missing_information": [],
         "human_review_required": task.domain != "general",
         "status": "draft",
     }
