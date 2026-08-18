@@ -69,6 +69,10 @@ Para confirmar que o Ollama está disponível:
 curl http://localhost:11434/api/tags
 ```
 
+## Documentação técnica
+
+A arquitetura de controlo, validação, aprovação, bloqueio, políticas, workspace, memória e auditoria está documentada em [`docs/architecture/controles-e-fluxo-do-agente.md`](docs/architecture/controles-e-fluxo-do-agente.md).
+
 ## Próximos módulos
 
 A sequência segura é acrescentar um executor de ferramentas em sandbox, armazenamento de documentos com RBAC, RAG por domínio, roteamento entre modelos, validação JSON estrita, observabilidade e depois áudio/transcrição. O módulo de áudio deve entrar somente depois de o núcleo, as permissões e a auditoria estarem validados.
