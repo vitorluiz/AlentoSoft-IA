@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 from alento_soft_ia.provider import OpenAICompatibleProvider, OllamaProvider
@@ -52,6 +53,39 @@ class RoutingTests(unittest.TestCase):
         self.assertIsInstance(provider, OpenAICompatibleProvider)
         self.assertEqual(provider.name, "openrouter")
         self.assertTrue(provider.configured)
+
+    def test_http_429_exposes_safe_quota_diagnostic(self):
+        provider = OpenAICompatibleProvider(
+            base_url="https://example.test/v1",
+            api_key="secret-key-that-must-not-appear",
+            model="test/model",
+            require_api_key=True,
+            name="test-cloud",
+        )
+        error_body = json.dumps(
+            {
+                "error": {
+                    "message": "You exceeded your current quota.",
+                    "type": "insufficient_quota",
+                    "code": "insufficient_quota",
+                }
+            }
+        ).encode("utf-8")
+        http_error = urllib.error.HTTPError(
+            "https://example.test/v1/chat/completions",
+            429,
+            "Too Many Requests",
+            {},
+            None,
+        )
+        http_error.read = lambda: error_body
+
+        with patch("urllib.request.urlopen", side_effect=http_error):
+            with self.assertRaisesRegex(RuntimeError, r"Provider HTTP 429 \(insufficient_quota\)") as raised:
+                provider.chat_json([{"role": "user", "content": "teste"}], {"type": "object"})
+
+        self.assertNotIn("secret-key-that-must-not-appear", str(raised.exception))
+        self.assertIn("exceeded your current quota", str(raised.exception))
 
     def test_openai_compatible_provider_sends_schema(self):
         schema = {

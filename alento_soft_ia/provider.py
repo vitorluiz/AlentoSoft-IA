@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 
 def _post_json(url: str, payload: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    import urllib.error
     import urllib.request
 
     request = urllib.request.Request(
@@ -16,8 +17,26 @@ def _post_json(url: str, payload: Dict[str, Any], headers: Optional[Dict[str, st
         headers={"Content-Type": "application/json", **(headers or {})},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=120) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raw_body = exc.read().decode("utf-8", errors="replace")
+        detail = ""
+        try:
+            error_payload = json.loads(raw_body)
+            error = error_payload.get("error", {}) if isinstance(error_payload, dict) else {}
+            error_type = error.get("type") or error.get("code")
+            message = str(error.get("message", "")).strip()
+            if error_type:
+                detail = f" ({error_type})"
+            if message:
+                detail += f": {message[:400]}"
+        except (json.JSONDecodeError, AttributeError):
+            detail = f": {raw_body[:400].strip()}" if raw_body.strip() else ""
+        raise RuntimeError(f"Provider HTTP {exc.code}{detail}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError(f"Falha de conexão com o provider: {exc}") from exc
 
 
 class OllamaProvider:
