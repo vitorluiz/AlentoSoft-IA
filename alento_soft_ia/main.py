@@ -12,7 +12,7 @@ from .audit import AuditLog
 from .core import AlentoAgent
 from .llm_skill import LLMPolicySkill
 from .marketing_skill import MarketingSkill
-from .provider import OllamaProvider
+from .routing import build_provider
 from .skills import internal_policy_checklist
 
 
@@ -31,9 +31,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--provider",
-        choices=["demo", "ollama"],
+        choices=["demo", "ollama", "openai", "openrouter", "hybrid"],
         default=os.getenv("ALENTO_PROVIDER", "demo"),
-        help="Usa a skill determinística ou o endpoint Ollama local",
+        help="Provider local, cloud explícito ou roteamento híbrido fail-closed",
+    )
+    parser.add_argument(
+        "--model",
+        help="Modelo explícito; caso omitido, usa MODEL_NAME, OPENAI_MODEL ou OPENROUTER_MODEL",
     )
     return parser
 
@@ -51,8 +55,9 @@ def main() -> None:
             "source_text": args.source_file.read_text(encoding="utf-8"),
             "channel": args.channel,
         }
-    if args.provider == "ollama":
-        provider = OllamaProvider()
+    provider = None
+    if args.provider != "demo":
+        provider = build_provider(args.provider, args.domain, context, model=args.model)
         skill = MarketingSkill(provider) if args.domain == "marketing" else LLMPolicySkill(provider)
     agent = AlentoAgent(audit_log=audit, skill=skill)
     task = agent.create_task(goal=args.goal, domain=args.domain, context=context)
@@ -76,7 +81,7 @@ def main() -> None:
         "output": task.output,
         "errors": task.errors,
         "elapsed_seconds": elapsed_seconds,
-        "provider": args.provider,
+        "provider": getattr(provider, "name", args.provider),
     }, ensure_ascii=False, indent=2))
 
 

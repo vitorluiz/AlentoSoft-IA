@@ -27,6 +27,8 @@ class OllamaProvider:
     `keep_alive`, que são importantes para o Qwen3.5 em máquinas sem GPU.
     """
 
+    name = "ollama"
+
     def __init__(
         self,
         base_url: Optional[str] = None,
@@ -76,24 +78,32 @@ class OllamaProvider:
 
 
 class OpenAICompatibleProvider:
-    """Cliente opcional para endpoints compatíveis com OpenAI, como vLLM."""
+    """Cliente para APIs compatíveis com Chat Completions e saída JSON Schema."""
 
     def __init__(
         self,
         base_url: Optional[str] = None,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
+        headers: Optional[Dict[str, str]] = None,
+        require_api_key: bool = False,
+        name: str = "openai_compatible",
     ):
         self.base_url = (base_url or os.getenv("MODEL_BASE_URL", "")).rstrip("/")
         self.api_key = api_key or os.getenv("MODEL_API_KEY", "")
         self.model = model or os.getenv("MODEL_NAME", "")
+        self.headers = headers or {}
+        self.require_api_key = require_api_key
+        self.name = name
 
     @property
     def configured(self) -> bool:
-        return bool(self.base_url and self.model)
+        return bool(self.base_url and self.model and (not self.require_api_key or self.api_key))
 
     def chat_json(self, messages: List[Dict[str, str]], schema: Dict[str, Any]) -> Dict[str, Any]:
         if not self.configured:
+            if self.require_api_key:
+                raise RuntimeError("Provider cloud não configurado. Defina a chave e o modelo do provider.")
             raise RuntimeError("Modelo não configurado. Defina MODEL_BASE_URL e MODEL_NAME.")
 
         payload = {
@@ -109,10 +119,11 @@ class OpenAICompatibleProvider:
                 },
             },
         }
+        auth_headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         body = _post_json(
             f"{self.base_url}/chat/completions",
             payload,
-            {"Authorization": f"Bearer {self.api_key}"} if self.api_key else None,
+            {**auth_headers, **self.headers} or None,
         )
         content = body["choices"][0]["message"]["content"]
         return json.loads(content)

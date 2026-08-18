@@ -84,6 +84,41 @@ PYTHONPATH=. python3 -m alento_soft_ia.main \\
 
 A saída contém canal, formato, título, texto, chamada para ação, fonte, evidência, riscos e `human_review_required`. A publicação automática em qualquer canal está bloqueada no MVP. Para uma máquina sem GPU, execute um canal por vez. Os limites padrão do Ollama são `OLLAMA_NUM_CTX=8192` e `OLLAMA_NUM_PREDICT=600`; podem ser reduzidos para acelerar o teste.
 
+## Roteamento híbrido local/cloud
+
+O AlentoSoft-IA pode usar um provider cloud para marketing institucional sem dados sensíveis e manter o Ollama local para clínica, prontuário, RH e financeiro. O modo `hybrid` é fail-closed: somente o domínio `marketing` pode ir para cloud e somente quando a fonte tiver um nome explicitamente autorizado. As fontes públicas de demonstração autorizadas por padrão são `granjimmy_contexto_marca.md` e `granjimmy_contexto_minimo.md`. O arquivo sensível `profissionais-granjimmy` não deve ser usado como fonte cloud nem entrar no repositório público.
+
+Para usar OpenRouter no marketing, configure uma chave de API e um identificador de modelo disponível na sua conta:
+
+```bash
+export OPENROUTER_API_KEY="sua-chave-fora-do-repositorio"
+export OPENROUTER_MODEL="<slug-do-modelo-disponivel>"
+export ALENTO_CLOUD_PROVIDER="openrouter"
+PYTHONPATH=. python3 -m alento_soft_ia.main \
+  --provider hybrid \
+  --domain marketing \
+  --channel whatsapp \
+  --goal "Criar uma mensagem curta de acolhimento para famílias" \
+  --source-file examples/marketing/granjimmy_contexto_minimo.md
+```
+
+Para chamar diretamente a API da OpenAI, use `OPENAI_API_KEY` e, opcionalmente, `OPENAI_MODEL`:
+
+```bash
+export OPENAI_API_KEY="sua-chave-fora-do-repositorio"
+export OPENAI_MODEL="gpt-5-mini"
+PYTHONPATH=. python3 -m alento_soft_ia.main \
+  --provider openai \
+  --domain marketing \
+  --channel instagram \
+  --goal "Criar um post educativo sobre acolhimento e orientação às famílias" \
+  --source-file examples/marketing/granjimmy_contexto_marca.md
+```
+
+O modo `hybrid` devolve `OllamaProvider` para `clinical`, `hr`, `finance` e demais domínios não autorizados para cloud. Mesmo que alguém tente usar `--provider openai` ou `--provider openrouter` em `clinical`, a barreira de domínio interrompe a execução antes da chamada externa. O resultado de marketing continua exigindo aprovação humana e nunca publica automaticamente.
+
+Uma assinatura do ChatGPT não deve ser presumida como uma chave de API da OpenAI; a assinatura ChatGPT e a plataforma API são produtos com faturamento separado. O OpenCode é principalmente uma ferramenta cliente para conectar providers; só poderá ser usado diretamente pelo AlentoSoft-IA se houver um endpoint compatível e uma credencial própria disponível. Não se deve enviar uma chave de assinatura ou credencial de sessão para o repositório.
+
 ## Documentação técnica
 
 A arquitetura de controlo, validação, aprovação, bloqueio, políticas, workspace, memória e auditoria está documentada em [`docs/architecture/controles-e-fluxo-do-agente.md`](docs/architecture/controles-e-fluxo-do-agente.md).
