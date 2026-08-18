@@ -39,6 +39,56 @@ class ValidationTests(unittest.TestCase):
             self.assertEqual(result.status, TaskStatus.FAILED)
             self.assertTrue(any("Campos obrigatórios ausentes" in error for error in result.errors))
 
+    def test_blocked_item_stops_task(self):
+        def blocked_skill(_task):
+            return {
+                "summary": "Pedido contém item não autorizado",
+                "items": [{
+                    "id": 1,
+                    "description": "Solicitar exame não previsto",
+                    "responsible": "RH",
+                    "status": "blocked",
+                    "source_section": "Seção 3",
+                    "evidence": "Não solicitado na política.",
+                }],
+                "sources": ["política fictícia"],
+                "missing_information": ["Não informado na fonte"],
+                "human_review_required": True,
+                "status": "ready_for_review",
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            agent = AlentoAgent(AuditLog(Path(directory) / "audit.sqlite3"), blocked_skill)
+            task = agent.create_task("Testar item bloqueado", "general")
+            result = agent.run(task)
+            self.assertEqual(result.status, TaskStatus.BLOCKED)
+
+    def test_review_required_waits_for_approval(self):
+        def review_skill(_task):
+            return {
+                "summary": "Rascunho para revisão",
+                "items": [{
+                    "id": 1,
+                    "description": "Conferir documento",
+                    "responsible": "RH",
+                    "status": "pending",
+                    "source_section": "Seção 3",
+                    "evidence": "Documento listado.",
+                }],
+                "sources": ["política fictícia"],
+                "missing_information": [],
+                "human_review_required": True,
+                "status": "ready_for_review",
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            agent = AlentoAgent(AuditLog(Path(directory) / "audit.sqlite3"), review_skill)
+            task = agent.create_task("Testar aprovação", "general")
+            result = agent.run(task)
+            self.assertEqual(result.status, TaskStatus.WAITING_APPROVAL)
+            result = agent.run(task, approval=True)
+            self.assertEqual(result.status, TaskStatus.COMPLETED)
+
     def test_llm_skill_sends_schema_and_requires_review(self):
         provider = FakeProvider({
             "summary": "Checklist administrativo",

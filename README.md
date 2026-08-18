@@ -61,7 +61,7 @@ PYTHONPATH=. python3 -m alento_soft_ia.main \\
   --source-file examples/politicas/politica_admissao_colaborador_ficticia.md
 ```
 
-A skill deve citar a seção e a evidência de cada item. Informações ausentes devem aparecer em `missing_information` e não podem ser convertidas em requisitos inventados.
+A skill deve citar a seção e a evidência de cada item. Informações ausentes devem aparecer em `missing_information` e não podem ser convertidas em requisitos inventados. Se um item vier com `status: blocked`, a tarefa fica bloqueada e não pode ser concluída apenas com `--approve`; a aprovação humana só libera um rascunho que não contenha bloqueios.
 
 Para confirmar que o Ollama está disponível:
 

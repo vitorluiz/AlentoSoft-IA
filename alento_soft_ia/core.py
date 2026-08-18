@@ -19,6 +19,7 @@ class TaskStatus(str, Enum):
     COMPLETED = "completed"
     REJECTED = "rejected"
     FAILED = "failed"
+    BLOCKED = "blocked"
 
 
 @dataclass
@@ -97,7 +98,13 @@ class Validator:
             errors.append("status deve ser 'draft' ou 'ready_for_review'.")
         if task.domain in self.SENSITIVE_DOMAINS and not result.get("human_review_required", False):
             errors.append("Domínio sensível exige revisão humana explícita.")
-        return {"ok": not errors, "errors": errors}
+        blocked_items = [item for item in result.get("items", []) if isinstance(item, dict) and item.get("status") == "blocked"]
+        return {
+            "ok": not errors,
+            "errors": errors,
+            "blocked": bool(blocked_items),
+            "requires_approval": bool(result.get("human_review_required", False)),
+        }
 
 
 class AlentoAgent:
@@ -122,7 +129,11 @@ class AlentoAgent:
             for step in task.steps:
                 step.status = "running"
                 if step.kind == "approval":
-                    if task.domain in Validator.SENSITIVE_DOMAINS and not approval:
+                    draft_output = task.steps[2].result or {}
+                    needs_approval = task.domain in Validator.SENSITIVE_DOMAINS or bool(
+                        draft_output.get("human_review_required", False)
+                    )
+                    if needs_approval and not approval:
                         step.status = "waiting_approval"
                         task.status = TaskStatus.WAITING_APPROVAL
                         self.audit.write("approval_required", {"task_id": task.id})
@@ -140,6 +151,11 @@ class AlentoAgent:
                         task.status = TaskStatus.FAILED
                         step.status = "failed"
                         self.audit.write("task_failed", {"task_id": task.id, "errors": task.errors})
+                        return task
+                    if validation.get("blocked"):
+                        task.status = TaskStatus.BLOCKED
+                        step.status = "blocked"
+                        self.audit.write("task_blocked", {"task_id": task.id})
                         return task
                     step.status = "completed"
                 else:
