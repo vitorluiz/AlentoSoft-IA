@@ -77,11 +77,12 @@ A skill de marketing usa uma fonte autorizada da marca e mantém cada peça em r
 PYTHONPATH=. python3 -m alento_soft_ia.main \\
   --provider ollama \\
   --domain marketing \\
-  --goal "Criar uma semana de conteúdo para Instagram, WhatsApp, blog e LinkedIn" \\
+  --channel instagram \\
+  --goal "Criar uma semana de conteúdo para Instagram" \\
   --source-file examples/marketing/granjimmy_contexto_marca.md
 ```
 
-A saída contém canal, formato, título, texto, chamada para ação, fonte, evidência, riscos e `human_review_required`. A publicação automática em qualquer canal está bloqueada no MVP.
+A saída contém canal, formato, título, texto, chamada para ação, fonte, evidência, riscos e `human_review_required`. A publicação automática em qualquer canal está bloqueada no MVP. Para uma máquina sem GPU, execute um canal por vez. Os limites padrão do Ollama são `OLLAMA_NUM_CTX=8192` e `OLLAMA_NUM_PREDICT=600`; podem ser reduzidos para acelerar o teste.
 
 ## Documentação técnica
 

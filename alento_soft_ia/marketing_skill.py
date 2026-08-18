@@ -71,6 +71,7 @@ class MarketingSkill:
             raise RuntimeError("Configure o endpoint do modelo antes de usar MarketingSkill.")
         source_text = str(task.context.get("source_text", "")).strip()
         source_name = str(task.context.get("source_name", "fonte não identificada"))
+        channel = str(task.context.get("channel", "instagram"))
         if not source_text:
             raise RuntimeError("MarketingSkill exige fontes autorizadas da marca.")
 
@@ -88,7 +89,8 @@ class MarketingSkill:
                     "Quando faltarem informações, inclua-as em missing_information. "
                     "Se o pedido exigir conteúdo não autorizado, marque o item como blocked e descreva o risco em risk_flags. "
                     "Todos os conteúdos são rascunhos e human_review_required deve ser true. "
-                    "O status da resposta deve ser ready_for_review. Não publique nada e não use ferramentas externas."
+                    "O status da resposta deve ser ready_for_review. Não publique nada e não use ferramentas externas. "
+                    f"Crie conteúdo somente para o canal {channel}; não crie peças para outros canais nesta execução."
                 ),
             },
             {
@@ -96,6 +98,7 @@ class MarketingSkill:
                 "content": (
                     f"Domínio: {task.domain}\n"
                     f"Objetivo: {task.goal}\n"
+                    f"Canal escolhido: {channel}\n"
                     f"Fonte autorizada: {source_name}\n"
                     "--- INÍCIO DA FONTE ---\n"
                     f"{source_text}\n"

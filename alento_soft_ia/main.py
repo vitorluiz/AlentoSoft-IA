@@ -24,6 +24,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace", default="workspaces/demo")
     parser.add_argument("--source-file", type=Path, help="Documento autorizado usado como fonte da skill")
     parser.add_argument(
+        "--channel",
+        default="instagram",
+        choices=["instagram", "whatsapp", "blog", "linkedin", "facebook", "youtube", "paid_ads"],
+        help="Canal único para a execução da skill de marketing",
+    )
+    parser.add_argument(
         "--provider",
         choices=["demo", "ollama"],
         default=os.getenv("ALENTO_PROVIDER", "demo"),
@@ -43,6 +49,7 @@ def main() -> None:
         context = {
             "source_name": args.source_file.name,
             "source_text": args.source_file.read_text(encoding="utf-8"),
+            "channel": args.channel,
         }
     if args.provider == "ollama":
         provider = OllamaProvider()

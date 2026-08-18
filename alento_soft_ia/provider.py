@@ -33,12 +33,16 @@ class OllamaProvider:
         model: Optional[str] = None,
         think: Optional[bool] = None,
         keep_alive: Optional[str] = None,
+        num_ctx: Optional[int] = None,
+        num_predict: Optional[int] = None,
     ):
         self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/api")).rstrip("/")
         self.model = model or os.getenv("MODEL_NAME", "qwen3.5:4b-q4_K_M")
         raw_think = os.getenv("OLLAMA_THINK", "false") if think is None else str(think).lower()
         self.think = raw_think in {"1", "true", "yes", "on"}
         self.keep_alive = keep_alive or os.getenv("OLLAMA_KEEP_ALIVE", "10m")
+        self.num_ctx = num_ctx or int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+        self.num_predict = num_predict or int(os.getenv("OLLAMA_NUM_PREDICT", "600"))
 
     @property
     def configured(self) -> bool:
@@ -55,7 +59,11 @@ class OllamaProvider:
             "think": self.think,
             "format": schema,
             "keep_alive": self.keep_alive,
-            "options": {"temperature": 0},
+            "options": {
+                "temperature": 0,
+                "num_ctx": self.num_ctx,
+                "num_predict": self.num_predict,
+            },
         }
         body = _post_json(f"{self.base_url}/chat", payload)
         content = body.get("message", {}).get("content", "")
