@@ -68,9 +68,30 @@ class Validator:
     def validate(self, task: Task, result: Dict[str, Any]) -> Dict[str, Any]:
         errors: List[str] = []
         if not isinstance(result, dict):
-            errors.append("A saída deve ser um objeto estruturado.")
-        if not result.get("summary"):
-            errors.append("A saída não contém resumo.")
+            return {"ok": False, "errors": ["A saída deve ser um objeto estruturado."]}
+
+        required = {"summary", "items", "sources", "human_review_required", "status"}
+        missing = sorted(required - set(result))
+        if missing:
+            errors.append(f"Campos obrigatórios ausentes: {', '.join(missing)}.")
+        if not isinstance(result.get("summary"), str) or not result.get("summary", "").strip():
+            errors.append("A saída não contém resumo textual.")
+        if not isinstance(result.get("items"), list) or not result.get("items"):
+            errors.append("A saída deve conter pelo menos um item.")
+        else:
+            for index, item in enumerate(result["items"], start=1):
+                if not isinstance(item, dict):
+                    errors.append(f"O item {index} não é um objeto estruturado.")
+                    continue
+                for field in ("id", "description", "responsible", "status"):
+                    if field not in item or not str(item[field]).strip():
+                        errors.append(f"O item {index} não contém '{field}'.")
+        if not isinstance(result.get("sources"), list):
+            errors.append("O campo sources deve ser uma lista.")
+        if not isinstance(result.get("human_review_required"), bool):
+            errors.append("human_review_required deve ser booleano.")
+        if result.get("status") not in {"draft", "ready_for_review"}:
+            errors.append("status deve ser 'draft' ou 'ready_for_review'.")
         if task.domain in self.SENSITIVE_DOMAINS and not result.get("human_review_required", False):
             errors.append("Domínio sensível exige revisão humana explícita.")
         return {"ok": not errors, "errors": errors}

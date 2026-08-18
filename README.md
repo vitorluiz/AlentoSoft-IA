@@ -38,15 +38,24 @@ PYTHONPATH=. python3 -m unittest discover -s tests -v
 
 ## Ligação ao Ollama
 
-O adaptador aceita endpoints compatíveis com OpenAI. Para usar o Ollama localmente:
+O adaptador nativo usa o endpoint local `/api/chat` para controlar `think=false`, JSON Schema, `temperature=0` e `keep_alive`. Para executar uma tarefa administrativa com o Qwen3.5:
 
 ```bash
-export MODEL_BASE_URL="http://localhost:11434/v1"
-export MODEL_API_KEY="ollama"
+cd /home/ubuntu/alento-soft-ia
 export MODEL_NAME="qwen3.5:4b-q4_K_M"
+PYTHONPATH=. python3 -m alento_soft_ia.main \
+  --provider ollama \
+  --goal "Criar checklist de admissão administrativa" \
+  --domain general
 ```
 
-A primeira integração deve usar JSON estruturado, `temperature=0` e `think=false` para tarefas simples. O modo thinking deve ser reservado para planeamento mais complexo, não ativado em todas as chamadas.
+O modo thinking fica desativado por padrão nas tarefas simples. Use `OLLAMA_THINK=true` somente para planeamento mais complexo e nunca como padrão em todas as chamadas. `OLLAMA_KEEP_ALIVE=10m` evita recarregar o modelo a cada tarefa durante os testes.
+
+Para confirmar que o Ollama está disponível:
+
+```bash
+curl http://localhost:11434/api/tags
+```
 
 ## Próximos módulos
 

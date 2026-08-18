@@ -17,10 +17,10 @@ def internal_policy_checklist(task: Task) -> Dict[str, Any]:
     return {
         "summary": f"Checklist inicial para: {task.goal}",
         "items": [
-            "Identificar objetivo e responsável.",
-            "Reunir somente documentos autorizados.",
-            "Validar campos obrigatórios e prazos.",
-            "Registar revisão humana antes da publicação.",
+            {"id": 1, "description": "Identificar objetivo e responsável.", "responsible": "Não informado", "status": "pending"},
+            {"id": 2, "description": "Reunir somente documentos autorizados.", "responsible": "Não informado", "status": "pending"},
+            {"id": 3, "description": "Validar campos obrigatórios e prazos.", "responsible": "Não informado", "status": "pending"},
+            {"id": 4, "description": "Registar revisão humana antes da publicação.", "responsible": "Não informado", "status": "pending"},
         ],
         "sources": [],
         "human_review_required": task.domain != "general",
