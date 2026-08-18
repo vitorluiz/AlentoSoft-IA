@@ -68,6 +68,8 @@ class Validator:
     SENSITIVE_DOMAINS = {"clinical", "hr", "finance", "accounting"}
 
     def validate(self, task: Task, result: Dict[str, Any]) -> Dict[str, Any]:
+        if task.domain == "marketing":
+            return self._validate_marketing(result)
         errors: List[str] = []
         if not isinstance(result, dict):
             return {"ok": False, "errors": ["A saída deve ser um objeto estruturado."]}
@@ -104,6 +106,68 @@ class Validator:
             "errors": errors,
             "blocked": bool(blocked_items),
             "requires_approval": bool(result.get("human_review_required", False)),
+        }
+
+    def _validate_marketing(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        errors: List[str] = []
+        if not isinstance(result, dict):
+            return {"ok": False, "errors": ["A saída de marketing deve ser um objeto estruturado."]}
+        required = {
+            "summary",
+            "items",
+            "sources",
+            "missing_information",
+            "risk_flags",
+            "human_review_required",
+            "status",
+        }
+        missing = sorted(required - set(result))
+        if missing:
+            errors.append(f"Campos obrigatórios de marketing ausentes: {', '.join(missing)}.")
+        if not isinstance(result.get("summary"), str) or not result.get("summary", "").strip():
+            errors.append("A saída de marketing não contém resumo.")
+        if not isinstance(result.get("items"), list) or not result.get("items"):
+            errors.append("A saída de marketing deve conter pelo menos um item.")
+        else:
+            required_item = (
+                "id",
+                "channel",
+                "format",
+                "title",
+                "copy",
+                "cta",
+                "status",
+                "source_section",
+                "evidence",
+            )
+            for index, item in enumerate(result["items"], start=1):
+                if not isinstance(item, dict):
+                    errors.append(f"O item de marketing {index} não é um objeto estruturado.")
+                    continue
+                for field in required_item:
+                    if field not in item or not str(item[field]).strip():
+                        errors.append(f"O item de marketing {index} não contém '{field}'.")
+                if item.get("status") not in {"draft", "blocked"}:
+                    errors.append(f"O item de marketing {index} tem status inválido.")
+        if not isinstance(result.get("sources"), list):
+            errors.append("sources de marketing deve ser uma lista.")
+        if not isinstance(result.get("missing_information"), list):
+            errors.append("missing_information de marketing deve ser uma lista.")
+        if not isinstance(result.get("risk_flags"), list):
+            errors.append("risk_flags de marketing deve ser uma lista.")
+        if result.get("human_review_required") is not True:
+            errors.append("Marketing exige human_review_required=true.")
+        if result.get("status") != "ready_for_review":
+            errors.append("Marketing deve permanecer em ready_for_review.")
+        blocked_items = [
+            item for item in result.get("items", [])
+            if isinstance(item, dict) and item.get("status") == "blocked"
+        ]
+        return {
+            "ok": not errors,
+            "errors": errors,
+            "blocked": bool(blocked_items),
+            "requires_approval": True,
         }
 
 

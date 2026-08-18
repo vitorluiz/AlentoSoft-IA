@@ -45,6 +45,12 @@ POLICIES = {
         human_approval_required=True,
         can_write_external_system=False,
     ),
+    "marketing": DomainPolicy(
+        name="marketing",
+        allowed_tools={"read_workspace", "write_workspace"},
+        human_approval_required=True,
+        can_write_external_system=False,
+    ),
 }
 
 

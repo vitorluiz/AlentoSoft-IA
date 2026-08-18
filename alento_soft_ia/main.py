@@ -11,6 +11,7 @@ from pathlib import Path
 from .audit import AuditLog
 from .core import AlentoAgent
 from .llm_skill import LLMPolicySkill
+from .marketing_skill import MarketingSkill
 from .provider import OllamaProvider
 from .skills import internal_policy_checklist
 
@@ -18,7 +19,7 @@ from .skills import internal_policy_checklist
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AlentoSoft-IA hospitalar — protótipo seguro")
     parser.add_argument("--goal", default="Preparar checklist para uma política interna do hospital")
-    parser.add_argument("--domain", default="general", choices=["general", "engineering", "clinical", "hr", "finance"])
+    parser.add_argument("--domain", default="general", choices=["general", "engineering", "clinical", "hr", "finance", "marketing"])
     parser.add_argument("--approve", action="store_true", help="Simula aprovação humana explícita")
     parser.add_argument("--workspace", default="workspaces/demo")
     parser.add_argument("--source-file", type=Path, help="Documento autorizado usado como fonte da skill")
@@ -44,7 +45,8 @@ def main() -> None:
             "source_text": args.source_file.read_text(encoding="utf-8"),
         }
     if args.provider == "ollama":
-        skill = LLMPolicySkill(OllamaProvider())
+        provider = OllamaProvider()
+        skill = MarketingSkill(provider) if args.domain == "marketing" else LLMPolicySkill(provider)
     agent = AlentoAgent(audit_log=audit, skill=skill)
     task = agent.create_task(goal=args.goal, domain=args.domain, context=context)
     started = time.perf_counter()

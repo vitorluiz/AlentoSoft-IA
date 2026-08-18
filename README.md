@@ -69,6 +69,20 @@ Para confirmar que o Ollama está disponível:
 curl http://localhost:11434/api/tags
 ```
 
+## Skill de marketing do Granjimmy
+
+A skill de marketing usa uma fonte autorizada da marca e mantém cada peça em revisão humana. Para testar localmente:
+
+```bash
+PYTHONPATH=. python3 -m alento_soft_ia.main \\
+  --provider ollama \\
+  --domain marketing \\
+  --goal "Criar uma semana de conteúdo para Instagram, WhatsApp, blog e LinkedIn" \\
+  --source-file examples/marketing/granjimmy_contexto_marca.md
+```
+
+A saída contém canal, formato, título, texto, chamada para ação, fonte, evidência, riscos e `human_review_required`. A publicação automática em qualquer canal está bloqueada no MVP.
+
 ## Documentação técnica
 
 A arquitetura de controlo, validação, aprovação, bloqueio, políticas, workspace, memória e auditoria está documentada em [`docs/architecture/controles-e-fluxo-do-agente.md`](docs/architecture/controles-e-fluxo-do-agente.md).
