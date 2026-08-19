@@ -548,6 +548,11 @@ def _send_email(report: str, subject: str) -> None:
     message["To"] = recipient
     message.set_content(report)
     context = ssl.create_default_context()
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=30, context=context) as server:
+            server.login(user, password)
+            server.send_message(message)
+        return
     with smtplib.SMTP(host, port, timeout=30) as server:
         server.starttls(context=context)
         server.login(user, password)
