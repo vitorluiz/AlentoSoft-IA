@@ -154,10 +154,10 @@ Também existe um wrapper para execução manual ou pelo agendador do computador
 Para executar semanalmente às 08:00 de segunda-feira no Linux, abra `crontab -e` e adicione uma linha como esta:
 
 ```cron
-0 8 * * 1 /home/ubuntu/AlentoSoft-IA/scripts/policy_watch_weekly.sh --send-email --send-whatsapp >> /home/ubuntu/AlentoSoft-IA/workspaces/policy-watch/cron.log 2>&1
+0 8 * * 1 POLICY_WATCH_ENV_FILE=/home/ubuntu/.config/alento-policy-watch.env /home/ubuntu/AlentoSoft-IA/scripts/policy_watch_weekly.sh --send-email --send-whatsapp >> /home/ubuntu/AlentoSoft-IA/workspaces/policy-watch/cron.log 2>&1
 ```
 
-O caminho deve ser ajustado ao diretório real do projeto. A execução manual continua disponível a qualquer momento; o cron não substitui a revisão do relatório.
+O caminho deve ser ajustado ao diretório real do projeto. A execução manual continua disponível a qualquer momento; o cron não substitui a revisão do relatório. Para notificações, prefira guardar as variáveis num ficheiro fora do repositório, por exemplo `/home/ubuntu/.config/alento-policy-watch.env`, com permissões `chmod 600`, e executar o wrapper com `POLICY_WATCH_ENV_FILE=/home/ubuntu/.config/alento-policy-watch.env`.
 
 A execução grava o histórico em `workspaces/policy-watch/policy_watch.sqlite3`, relatórios datados em `workspaces/policy-watch/reports/` e o relatório mais recente em `workspaces/policy-watch/reports/latest.md`. É possível indicar outros caminhos com `--db` e `--report-dir`. O timeout padrão é de 15 segundos por fonte e pode ser alterado com `--timeout 30`; páginas lentas viram erros registados, sem travar o restante da coleta.
 
