@@ -161,6 +161,8 @@ O caminho deve ser ajustado ao diretório real do projeto. A execução manual c
 
 A execução grava o histórico em `workspaces/policy-watch/policy_watch.sqlite3`, relatórios datados em `workspaces/policy-watch/reports/` e o relatório mais recente em `workspaces/policy-watch/reports/latest.md`. É possível indicar outros caminhos com `--db` e `--report-dir`. O timeout padrão é de 30 segundos por fonte e pode ser alterado com `--timeout 10`; as fontes são coletadas em paralelo e páginas lentas viram erros registados, sem travar o restante da coleta. Se houver erros, o relatório é marcado como parcial e não afirma que não houve alterações nas fontes que falharam.
 
+O normalizador v2 remove scripts, menus, rodapés, avisos de interface, identificadores numéricos dinâmicos e outros elementos instáveis antes de comparar o conteúdo. Assim, uma alteração de navegação ou de um ID interno não deve gerar um alerta crítico. O estado `critical` fica reservado para diferenças no conteúdo observado da política ou da operação. Ao atualizar uma instalação que já possua snapshots antigos, a primeira execução reprocessa as linhas de base antigas sem gerar alertas; a comparação normal começa na execução seguinte.
+
 O envio de e-mail é opcional e usa SMTP configurado por variáveis de ambiente, sem guardar credenciais no repositório:
 
 ```bash

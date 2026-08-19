@@ -29,6 +29,10 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 
+NORMALIZATION_VERSION = "v2"
+_DYNAMIC_ID_RE = re.compile(r"\b\d{8,}\b")
+
+
 @dataclass(frozen=True)
 class WatchSource:
     id: str
@@ -64,6 +68,7 @@ class WatchRun:
     changes: tuple[Change, ...]
     baselines: tuple[str, ...]
     errors: tuple[str, ...]
+    rebased: tuple[str, ...] = ()
 
 
 DEFAULT_SOURCES: tuple[WatchSource, ...] = (
@@ -167,9 +172,16 @@ DEFAULT_SOURCES: tuple[WatchSource, ...] = (
 
 
 class _VisibleTextParser(HTMLParser):
-    """Extrai texto legível sem guardar scripts, estilos ou SVGs."""
+    """Extrai texto sem scripts, navegação e elementos de interface instáveis."""
 
-    _ignored = {"script", "style", "noscript", "svg", "template"}
+    _ignored = {
+        "script", "style", "noscript", "svg", "template", "nav", "footer",
+        "header", "aside", "form", "button",
+    }
+    _block_tags = {
+        "article", "br", "div", "h1", "h2", "h3", "h4", "h5", "h6",
+        "li", "p", "section", "tr", "ul", "ol",
+    }
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -182,6 +194,8 @@ class _VisibleTextParser(HTMLParser):
         tag = tag.lower()
         if tag in self._ignored:
             self._ignore_depth += 1
+        if self._ignore_depth == 0 and tag in self._block_tags:
+            self.parts.append("\n")
         if tag == "title":
             self._in_title = True
 
@@ -189,6 +203,8 @@ class _VisibleTextParser(HTMLParser):
         tag = tag.lower()
         if tag in self._ignored and self._ignore_depth:
             self._ignore_depth -= 1
+        if self._ignore_depth == 0 and tag in self._block_tags:
+            self.parts.append("\n")
         if tag == "title":
             self._in_title = False
 
@@ -215,6 +231,7 @@ def normalize_text(raw: str) -> tuple[str, str]:
     lines = []
     previous_blank = False
     for line in text.splitlines():
+        line = _DYNAMIC_ID_RE.sub("", line)
         line = re.sub(r"[ \t]+", " ", line).strip()
         if not line:
             if not previous_blank:
@@ -224,7 +241,8 @@ def normalize_text(raw: str) -> tuple[str, str]:
         lines.append(line)
         previous_blank = False
     normalized = "\n".join(lines).strip()
-    return normalized, re.sub(r"\s+", " ", html.unescape(title)).strip()
+    clean_title = _DYNAMIC_ID_RE.sub("", html.unescape(title))
+    return normalized, re.sub(r"\s+", " ", clean_title).strip()
 
 
 def fetch_url(source: WatchSource, timeout: int = 30) -> FetchResult:
@@ -276,6 +294,30 @@ def fetch_url(source: WatchSource, timeout: int = 30) -> FetchResult:
 
 def _hash_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _is_noise_diff(diff: str) -> bool:
+    """Identifica alterações de interface que não mudam a política observada."""
+    changed_lines = [
+        line[1:].strip()
+        for line in diff.splitlines()
+        if (line.startswith("+") or line.startswith("-"))
+        and not line.startswith(("+++", "---"))
+    ]
+    if not changed_lines:
+        return True
+    noise_terms = {
+        "enviar feedback", "send feedback", "was this helpful", "isso foi útil",
+        "como podemos melhorá-lo", "how can we improve", "ativar o modo escuro",
+        "enable dark mode", "idioma", "language", "moldando o futuro do suporte",
+        "estudos de pesquisa com usuários", "research studies", "menu principal",
+        "pesquisar na central de ajuda", "search help center", "google apps",
+    }
+    return all(
+        any(term in line.lower() for term in noise_terms)
+        or not re.sub(r"\d{8,}", "", line).strip()
+        for line in changed_lines
+    )
 
 
 def _severity(source: WatchSource, diff: str) -> str:
@@ -363,6 +405,7 @@ class PolicyWatch:
                     content_hash TEXT NOT NULL,
                     content TEXT NOT NULL,
                     error TEXT NOT NULL DEFAULT '',
+                    normalization_version TEXT NOT NULL DEFAULT 'legacy',
                     FOREIGN KEY(source_id) REFERENCES sources(id)
                 );
                 CREATE TABLE IF NOT EXISTS changes (
@@ -378,6 +421,14 @@ class PolicyWatch:
                 );
                 """
             )
+            snapshot_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(snapshots)").fetchall()
+            }
+            if "normalization_version" not in snapshot_columns:
+                connection.execute(
+                    "ALTER TABLE snapshots ADD COLUMN normalization_version TEXT NOT NULL DEFAULT 'legacy'"
+                )
+
             connection.executemany(
                 """
                 INSERT INTO sources (id, platform, title, url, category, priority)
@@ -398,6 +449,7 @@ class PolicyWatch:
         changes: list[Change] = []
         baselines: list[str] = []
         errors: list[str] = []
+        rebased: list[str] = []
 
         with ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, len(self.sources)))) as executor:
             results = tuple(executor.map(self._fetch_one, self.sources))
@@ -412,8 +464,8 @@ class PolicyWatch:
                 connection.execute(
                     """
                     INSERT INTO snapshots
-                    (source_id, fetched_at, status_code, title, content_hash, content, error)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (source_id, fetched_at, status_code, title, content_hash, content, error, normalization_version)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         source.id,
@@ -423,6 +475,7 @@ class PolicyWatch:
                         content_hash,
                         result.text,
                         result.error,
+                        NORMALIZATION_VERSION,
                     ),
                 )
                 if result.error:
@@ -431,9 +484,14 @@ class PolicyWatch:
                 if previous is None:
                     baselines.append(source.id)
                     continue
+                if previous["normalization_version"] != NORMALIZATION_VERSION:
+                    rebased.append(source.id)
+                    continue
                 if previous["content_hash"] == content_hash:
                     continue
                 diff = _short_diff(previous["content"], result.text)
+                if _is_noise_diff(diff):
+                    continue
                 severity = _severity(source, diff)
                 summary = _diff_summary(diff)
                 changes.append(
@@ -463,12 +521,21 @@ class PolicyWatch:
                     ),
                 )
 
-        report_path = self._write_report(run_id, timestamp, changes, baselines, errors)
-        return WatchRun(run_id, report_path, tuple(changes), tuple(baselines), tuple(errors))
+        report_path = self._write_report(run_id, timestamp, changes, baselines, errors, rebased)
+        return WatchRun(run_id, report_path, tuple(changes), tuple(baselines), tuple(errors), tuple(rebased))
 
     def _fetch_one(self, source: WatchSource) -> FetchResult:
         try:
-            return self.fetcher(source)
+            result = self.fetcher(source)
+            if result.error or not result.text:
+                return result
+            normalized, parsed_title = normalize_text(result.text)
+            return FetchResult(
+                result.status_code,
+                normalized,
+                parsed_title or result.title,
+                result.error,
+            )
         except Exception as exc:
             return FetchResult(0, "", error=f"coleta: {exc}")
 
@@ -479,6 +546,7 @@ class PolicyWatch:
         changes: list[Change],
         baselines: list[str],
         errors: list[str],
+        rebased: list[str],
     ) -> Path:
         report_path = self.report_dir / f"policy-watch-{run_id}.md"
         lines = [
@@ -488,6 +556,7 @@ class PolicyWatch:
             f"- Fontes verificadas: `{len(self.sources)}`",
             f"- Alterações detectadas: `{len(changes)}`",
             f"- Novas linhas de base: `{len(baselines)}`",
+            f"- Linhas de base reprocessadas: `{len(rebased)}`",
             f"- Erros de coleta: `{len(errors)}`",
             "",
         ]
@@ -499,7 +568,10 @@ class PolicyWatch:
                 "",
             ]
         elif not changes:
-            lines += ["## Resultado", "", "Nenhuma alteração foi detectada desde o último snapshot.", ""]
+            result_text = "Nenhuma alteração foi detectada desde o último snapshot."
+            if rebased:
+                result_text += " Algumas fontes foram reprocessadas após a atualização do normalizador."
+            lines += ["## Resultado", "", result_text, ""]
         else:
             lines += ["## Alterações detectadas", ""]
             for change in sorted(changes, key=lambda item: (item.severity, item.source.platform, item.source.title)):
@@ -517,6 +589,15 @@ class PolicyWatch:
                 ]
         if baselines:
             lines += ["## Fontes inicializadas", "", *[f"- `{source_id}`" for source_id in baselines], ""]
+        if rebased:
+            lines += [
+                "## Fontes reprocessadas",
+                "",
+                "O conteúdo anterior usava um normalizador antigo; nenhuma alteração foi alertada durante a reconstrução da linha de base.",
+                "",
+                *[f"- `{source_id}`" for source_id in rebased],
+                "",
+            ]
         if errors:
             lines += ["## Erros de coleta", "", *[f"- {error}" for error in errors], ""]
         lines += [
@@ -662,6 +743,7 @@ def main() -> None:
             for change in run.changes
         ],
         "baselines": list(run.baselines),
+        "rebased": list(run.rebased),
         "errors": list(run.errors),
         "source_count": len(DEFAULT_SOURCES),
         "successful_sources": len(DEFAULT_SOURCES) - len(run.errors),

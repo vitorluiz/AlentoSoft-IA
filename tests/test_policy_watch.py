@@ -3,7 +3,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from alento_soft_ia.policy_watch import FetchResult, PolicyWatch, WatchSource
+from alento_soft_ia.policy_watch import FetchResult, PolicyWatch, WatchSource, normalize_text
 
 
 class PolicyWatchTests(unittest.TestCase):
@@ -66,6 +66,58 @@ class PolicyWatchTests(unittest.TestCase):
         self.assertIn("Atendimento 24 horas", report)
         self.assertIn("Atendimento das 8h às 18h", report)
         self.assertIn("[CRITICAL] Google Business Profile", report)
+
+    def test_normalize_ignores_navigation_footer_and_dynamic_ids(self):
+        raw = """
+        <html><header>Menu principal</header><main>
+        <h1>Política de avaliações</h1>
+        <p>Não publique conteúdo enganoso.</p>
+        </main><footer>Enviar feedback 123456789012345</footer></html>
+        """
+        normalized, title = normalize_text(raw)
+        self.assertEqual(title, "")
+        self.assertIn("Política de avaliações", normalized)
+        self.assertIn("Não publique conteúdo enganoso.", normalized)
+        self.assertNotIn("Menu principal", normalized)
+        self.assertNotIn("Enviar feedback", normalized)
+        self.assertNotIn("123456789012345", normalized)
+
+    def test_dynamic_only_change_does_not_create_alert(self):
+        sources = (WatchSource("dynamic", "Google", "Ajuda", "https://example.test", "help", "critical"),)
+        versions = [
+            "<main><h1>Políticas</h1><p>Conteúdo estável.</p><footer>ID 123456789012345</footer></main>",
+            "<main><h1>Políticas</h1><p>Conteúdo estável.</p><footer>ID 987654321098765</footer></main>",
+        ]
+
+        def fetcher(source):
+            return FetchResult(200, versions.pop(0), "Políticas")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            watch = PolicyWatch(root / "watch.sqlite3", root / "reports", sources, fetcher)
+            watch.run(datetime(2026, 8, 18, tzinfo=timezone.utc))
+            second = watch.run(datetime(2026, 8, 25, tzinfo=timezone.utc))
+
+        self.assertEqual(second.changes, ())
+
+    def test_legacy_snapshot_is_rebased_without_alert(self):
+        sources = (WatchSource("legacy", "Google", "Ajuda", "https://example.test", "help", "critical"),)
+
+        def fetcher(source):
+            return FetchResult(200, "<main><p>Conteúdo estável.</p></main>", "Ajuda")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            watch = PolicyWatch(root / "watch.sqlite3", root / "reports", sources, fetcher)
+            watch.run(datetime(2026, 8, 18, tzinfo=timezone.utc))
+            with watch._connect() as connection:
+                connection.execute("UPDATE snapshots SET normalization_version = 'legacy'")
+            second = watch.run(datetime(2026, 8, 25, tzinfo=timezone.utc))
+            report = second.report_path.read_text(encoding="utf-8")
+
+        self.assertEqual(second.changes, ())
+        self.assertEqual(second.rebased, ("legacy",))
+        self.assertIn("Fontes reprocessadas", report)
 
     def test_fetch_error_is_recorded_without_fake_change(self):
         sources = (
