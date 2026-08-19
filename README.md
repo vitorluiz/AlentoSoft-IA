@@ -145,6 +145,20 @@ Para executar uma verificação manual:
 PYTHONPATH=. python3 -m alento_soft_ia.policy_watch
 ```
 
+Também existe um wrapper para execução manual ou pelo agendador do computador:
+
+```bash
+./scripts/policy_watch_weekly.sh
+```
+
+Para executar semanalmente às 08:00 de segunda-feira no Linux, abra `crontab -e` e adicione uma linha como esta:
+
+```cron
+0 8 * * 1 /home/ubuntu/AlentoSoft-IA/scripts/policy_watch_weekly.sh --send-email --send-whatsapp >> /home/ubuntu/AlentoSoft-IA/workspaces/policy-watch/cron.log 2>&1
+```
+
+O caminho deve ser ajustado ao diretório real do projeto. A execução manual continua disponível a qualquer momento; o cron não substitui a revisão do relatório.
+
 A execução grava o histórico em `workspaces/policy-watch/policy_watch.sqlite3`, relatórios datados em `workspaces/policy-watch/reports/` e o relatório mais recente em `workspaces/policy-watch/reports/latest.md`. É possível indicar outros caminhos com `--db` e `--report-dir`. O timeout padrão é de 15 segundos por fonte e pode ser alterado com `--timeout 30`; páginas lentas viram erros registados, sem travar o restante da coleta.
 
 O envio de e-mail é opcional e usa SMTP configurado por variáveis de ambiente, sem guardar credenciais no repositório:
