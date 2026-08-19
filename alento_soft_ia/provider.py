@@ -22,18 +22,34 @@ def _post_json(url: str, payload: Dict[str, Any], headers: Optional[Dict[str, st
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raw_body = exc.read().decode("utf-8", errors="replace")
-        detail = ""
+        detail_parts: List[str] = []
         try:
             error_payload = json.loads(raw_body)
             error = error_payload.get("error", {}) if isinstance(error_payload, dict) else {}
-            error_type = error.get("type") or error.get("code")
+            metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
+            metadata = metadata if isinstance(metadata, dict) else {}
+            error_type = metadata.get("error_type") or error.get("type") or error.get("code")
+            provider_name = metadata.get("provider_name")
+            provider_code = metadata.get("provider_code")
             message = str(error.get("message", "")).strip()
             if error_type:
-                detail = f" ({error_type})"
+                detail_parts.append(str(error_type))
+            if provider_name:
+                detail_parts.append(f"provider={provider_name}")
+            if provider_code:
+                detail_parts.append(f"provider_code={provider_code}")
             if message:
-                detail += f": {message[:400]}"
+                detail_parts.append(message[:400])
         except (json.JSONDecodeError, AttributeError):
-            detail = f": {raw_body[:400].strip()}" if raw_body.strip() else ""
+            if raw_body.strip():
+                detail_parts.append(raw_body[:400].strip())
+
+        response_headers = exc.headers or {}
+        for header_name in ("Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"):
+            header_value = response_headers.get(header_name)
+            if header_value:
+                detail_parts.append(f"{header_name}={header_value}")
+        detail = f": {'; '.join(detail_parts)}" if detail_parts else ""
         raise RuntimeError(f"Provider HTTP {exc.code}{detail}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError(f"Falha de conexão com o provider: {exc}") from exc

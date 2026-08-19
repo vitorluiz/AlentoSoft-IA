@@ -2,6 +2,7 @@ import json
 import os
 import unittest
 import urllib.error
+from email.message import Message
 from unittest.mock import patch
 
 from alento_soft_ia.provider import OpenAICompatibleProvider, OllamaProvider
@@ -65,9 +66,14 @@ class RoutingTests(unittest.TestCase):
         error_body = json.dumps(
             {
                 "error": {
-                    "message": "You exceeded your current quota.",
-                    "type": "insufficient_quota",
-                    "code": "insufficient_quota",
+                    "message": "Provider returned error",
+                    "type": "429",
+                    "code": 429,
+                    "metadata": {
+                        "error_type": "rate_limit_exceeded",
+                        "provider_name": "Google",
+                        "provider_code": "model_capacity",
+                    },
                 }
             }
         ).encode("utf-8")
@@ -79,13 +85,18 @@ class RoutingTests(unittest.TestCase):
             None,
         )
         http_error.read = lambda: error_body
+        http_error.headers = Message()
+        http_error.headers.add_header("Retry-After", "7")
+        http_error.headers.add_header("X-RateLimit-Remaining", "0")
 
         with patch("urllib.request.urlopen", side_effect=http_error):
-            with self.assertRaisesRegex(RuntimeError, r"Provider HTTP 429 \(insufficient_quota\)") as raised:
+            with self.assertRaisesRegex(RuntimeError, r"Provider HTTP 429: rate_limit_exceeded; provider=Google") as raised:
                 provider.chat_json([{"role": "user", "content": "teste"}], {"type": "object"})
 
         self.assertNotIn("secret-key-that-must-not-appear", str(raised.exception))
-        self.assertIn("exceeded your current quota", str(raised.exception))
+        self.assertIn("provider_code=model_capacity", str(raised.exception))
+        self.assertIn("Retry-After=7", str(raised.exception))
+        self.assertIn("X-RateLimit-Remaining=0", str(raised.exception))
 
     def test_openai_compatible_provider_sends_schema(self):
         schema = {
