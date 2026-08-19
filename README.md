@@ -135,6 +135,43 @@ Se a API retornar `Provider HTTP 429`, observe o tipo exibido entre parênteses.
 
 Uma assinatura do ChatGPT não deve ser presumida como uma chave de API da OpenAI; a assinatura ChatGPT e a plataforma API são produtos com faturamento separado. O OpenCode é principalmente uma ferramenta cliente para conectar providers; só poderá ser usado diretamente pelo AlentoSoft-IA se houver um endpoint compatível e uma credencial própria disponível. Não se deve enviar uma chave de assinatura ou credencial de sessão para o repositório.
 
+## Vigia de políticas e Perfil da Empresa
+
+O vigia lê fontes públicas de Meta, LinkedIn, YouTube e Google Business Profile, guarda snapshots em SQLite, gera relatórios Markdown e detecta alterações entre execuções. Ele funciona manualmente por padrão e não publica, edita perfis, responde avaliações ou denuncia conteúdo automaticamente.
+
+Para executar uma verificação manual:
+
+```bash
+PYTHONPATH=. python3 -m alento_soft_ia.policy_watch
+```
+
+A execução grava o histórico em `workspaces/policy-watch/policy_watch.sqlite3`, relatórios datados em `workspaces/policy-watch/reports/` e o relatório mais recente em `workspaces/policy-watch/reports/latest.md`. É possível indicar outros caminhos com `--db` e `--report-dir`. O timeout padrão é de 15 segundos por fonte e pode ser alterado com `--timeout 30`; páginas lentas viram erros registados, sem travar o restante da coleta.
+
+O envio de e-mail é opcional e usa SMTP configurado por variáveis de ambiente, sem guardar credenciais no repositório:
+
+```bash
+export POLICY_WATCH_SMTP_HOST="smtp.exemplo.com"
+export POLICY_WATCH_SMTP_PORT="587"
+export POLICY_WATCH_SMTP_USER="usuario"
+export POLICY_WATCH_SMTP_PASSWORD="senha-fora-do-repositorio"
+export POLICY_WATCH_EMAIL_FROM="vigia@exemplo.com"
+export POLICY_WATCH_EMAIL_TO="responsavel@exemplo.com"
+PYTHONPATH=. python3 -m alento_soft_ia.policy_watch --send-email
+```
+
+O WhatsApp usa a WhatsApp Cloud API oficial e exige um token, um phone number ID, um destinatário interno e um template aprovado pela Meta. A integração não deve ser usada para enviar mensagens automáticas a pacientes ou famílias neste MVP:
+
+```bash
+export POLICY_WATCH_WHATSAPP_ACCESS_TOKEN="token-fora-do-repositorio"
+export POLICY_WATCH_WHATSAPP_PHONE_NUMBER_ID="id-do-numero"
+export POLICY_WATCH_WHATSAPP_TO="5511XXXXXXXXX"
+export POLICY_WATCH_WHATSAPP_TEMPLATE_NAME="policy_watch_weekly"
+export POLICY_WATCH_WHATSAPP_TEMPLATE_LANGUAGE="pt_BR"
+PYTHONPATH=. python3 -m alento_soft_ia.policy_watch --send-whatsapp
+```
+
+Fora da janela de atendimento do WhatsApp, a Meta exige templates aprovados; por isso, o envio semanal deve usar um template de utilidade previamente aprovado e destinado somente ao responsável interno. Tokens e IDs devem permanecer no ambiente local ou num gestor de segredos.
+
 ## Documentação técnica
 
 A arquitetura de controlo, validação, aprovação, bloqueio, políticas, workspace, memória e auditoria está documentada em [`docs/architecture/controles-e-fluxo-do-agente.md`](docs/architecture/controles-e-fluxo-do-agente.md).
