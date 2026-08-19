@@ -19,6 +19,7 @@ import sqlite3
 import ssl
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import unified_diff
@@ -325,11 +326,13 @@ class PolicyWatch:
         report_dir: Path,
         sources: Iterable[WatchSource] = DEFAULT_SOURCES,
         fetcher: Callable[[WatchSource], FetchResult] = fetch_url,
+        max_workers: int = 4,
     ) -> None:
         self.db_path = Path(db_path)
         self.report_dir = Path(report_dir)
         self.sources = tuple(sources)
         self.fetcher = fetcher
+        self.max_workers = max(1, int(max_workers))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.report_dir.mkdir(parents=True, exist_ok=True)
         self._init_db()
@@ -396,13 +399,15 @@ class PolicyWatch:
         baselines: list[str] = []
         errors: list[str] = []
 
+        with ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, len(self.sources)))) as executor:
+            results = tuple(executor.map(self._fetch_one, self.sources))
+
         with self._connect() as connection:
-            for source in self.sources:
+            for source, result in zip(self.sources, results):
                 previous = connection.execute(
                     "SELECT * FROM snapshots WHERE source_id = ? ORDER BY id DESC LIMIT 1",
                     (source.id,),
                 ).fetchone()
-                result = self.fetcher(source)
                 content_hash = _hash_text(result.text)
                 connection.execute(
                     """
@@ -461,6 +466,12 @@ class PolicyWatch:
         report_path = self._write_report(run_id, timestamp, changes, baselines, errors)
         return WatchRun(run_id, report_path, tuple(changes), tuple(baselines), tuple(errors))
 
+    def _fetch_one(self, source: WatchSource) -> FetchResult:
+        try:
+            return self.fetcher(source)
+        except Exception as exc:
+            return FetchResult(0, "", error=f"coleta: {exc}")
+
     def _write_report(
         self,
         run_id: str,
@@ -480,7 +491,14 @@ class PolicyWatch:
             f"- Erros de coleta: `{len(errors)}`",
             "",
         ]
-        if not changes:
+        if not changes and errors:
+            lines += [
+                "## Resultado parcial",
+                "",
+                "A coleta não foi completa; não é possível concluir que não houve alterações nas fontes com erro.",
+                "",
+            ]
+        elif not changes:
             lines += ["## Resultado", "", "Nenhuma alteração foi detectada desde o último snapshot.", ""]
         else:
             lines += ["## Alterações detectadas", ""]
@@ -587,9 +605,12 @@ def _notification_summary(run: WatchRun) -> str:
     else:
         error_text = "nenhum"
     critical = sum(change.severity == "critical" for change in run.changes)
+    total = len(DEFAULT_SOURCES)
+    successful = total - len(run.errors)
+    coverage = "completa" if not run.errors else "PARCIAL"
     return (
-        f"Vigia Granjimmy: {len(run.changes)} alteração(ões), "
-        f"{critical} crítica(s), {len(run.baselines)} fonte(s) inicializada(s), "
+        f"Vigia Granjimmy: coleta {coverage} ({successful}/{total} fontes), "
+        f"{len(run.changes)} alteração(ões), {critical} crítica(s), "
         f"erros de coleta: {error_text}. Consulte o relatório local."
     )
 
@@ -598,7 +619,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Vigia semanal de políticas do Granjimmy")
     parser.add_argument("--db", type=Path, default=Path("workspaces/policy-watch/policy_watch.sqlite3"))
     parser.add_argument("--report-dir", type=Path, default=Path("workspaces/policy-watch/reports"))
-    parser.add_argument("--timeout", type=int, default=15, help="Tempo máximo em segundos por fonte")
+    parser.add_argument("--timeout", type=int, default=30, help="Tempo máximo em segundos por fonte")
     parser.add_argument("--send-email", action="store_true", help="Envia o resumo para o e-mail configurado")
     parser.add_argument("--send-whatsapp", action="store_true", help="Envia o resumo via template WhatsApp configurado")
     return parser
@@ -612,7 +633,8 @@ def main() -> None:
     summary = _notification_summary(run)
     if args.send_email:
         try:
-            _send_email(run.report_path.read_text(encoding="utf-8"), f"Vigia Granjimmy — {run.run_id}")
+            subject_state = "coleta parcial" if run.errors else "coleta completa"
+            _send_email(run.report_path.read_text(encoding="utf-8"), f"Vigia Granjimmy — {subject_state} — {run.run_id}")
         except Exception as exc:
             notification_errors.append(f"e-mail: {exc}")
     if args.send_whatsapp:
@@ -636,6 +658,8 @@ def main() -> None:
         ],
         "baselines": list(run.baselines),
         "errors": list(run.errors),
+        "source_count": len(DEFAULT_SOURCES),
+        "successful_sources": len(DEFAULT_SOURCES) - len(run.errors),
         "notification_errors": notification_errors,
     }, ensure_ascii=False, indent=2))
 

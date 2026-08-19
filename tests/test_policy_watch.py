@@ -90,5 +90,30 @@ class PolicyWatchTests(unittest.TestCase):
         self.assertEqual(run.errors, ("Ajuda: HTTP 503",))
 
 
+    def test_partial_run_warns_when_one_source_fails(self):
+        sources = (
+            WatchSource("ok", "Meta", "Fonte OK", "https://example.test/ok", "help", "important"),
+            WatchSource("bad", "Google", "Fonte lenta", "https://example.test/bad", "help", "critical"),
+        )
+        calls = {"ok": 0, "bad": 0}
+
+        def fetcher(source):
+            calls[source.id] += 1
+            if source.id == "bad":
+                return FetchResult(0, "", error="timeout após 5s")
+            return FetchResult(200, "conteúdo público", "Fonte OK")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = PolicyWatch(root / "watch.sqlite3", root / "reports", sources, fetcher, max_workers=2).run()
+            report = run.report_path.read_text(encoding="utf-8")
+
+        self.assertEqual(calls, {"ok": 1, "bad": 1})
+        self.assertEqual(run.baselines, ("ok",))
+        self.assertEqual(run.errors, ("Fonte lenta: timeout após 5s",))
+        self.assertIn("Resultado parcial", report)
+        self.assertIn("não é possível concluir", report)
+
+
 if __name__ == "__main__":
     unittest.main()
