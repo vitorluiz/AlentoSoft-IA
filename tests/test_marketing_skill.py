@@ -62,6 +62,24 @@ class MarketingSkillTests(unittest.TestCase):
         self.assertTrue(result["human_review_required"])
         self.assertEqual(result["status"], "ready_for_review")
 
+    def test_quality_warning_does_not_block_safe_draft(self):
+        result = self._result()
+        result["items"][0]["copy"] = "Acolher e apairar famílias faz parte do cuidado."
+        skill = MarketingSkill(FakeProvider(result))
+        generated = skill(self._task(skill))
+        self.assertTrue(generated["quality_warnings"])
+        self.assertIn("apoiar", generated["quality_warnings"][0])
+
+        with tempfile.TemporaryDirectory() as directory:
+            agent = AlentoAgent(AuditLog(Path(directory) / "audit.sqlite3"), skill)
+            task = agent.create_task(
+                "Criar conteúdo educativo",
+                "marketing",
+                context={"source_name": "marca", "source_text": "Acolhimento e suporte às famílias."},
+            )
+            task = agent.run(task)
+            self.assertEqual(task.status, TaskStatus.WAITING_APPROVAL)
+
     def test_marketing_draft_waits_for_approval(self):
         skill = MarketingSkill(FakeProvider(self._result()))
         with tempfile.TemporaryDirectory() as directory:

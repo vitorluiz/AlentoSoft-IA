@@ -21,6 +21,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--goal", default="Preparar checklist para uma política interna do hospital")
     parser.add_argument("--domain", default="general", choices=["general", "engineering", "clinical", "hr", "finance", "marketing"])
     parser.add_argument("--approve", action="store_true", help="Simula aprovação humana explícita")
+    parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="Mostra o rascunho gerado sem aprovar nem publicar a tarefa",
+    )
     parser.add_argument("--workspace", default="workspaces/demo")
     parser.add_argument("--source-file", type=Path, help="Documento autorizado usado como fonte da skill")
     parser.add_argument(
@@ -65,7 +70,7 @@ def main() -> None:
     task = agent.run(task, approval=args.approve)
     elapsed_seconds = round(time.perf_counter() - started, 3)
 
-    print(json.dumps({
+    response = {
         "task_id": task.id,
         "status": task.status.value,
         "domain": task.domain,
@@ -82,7 +87,13 @@ def main() -> None:
         "errors": task.errors,
         "elapsed_seconds": elapsed_seconds,
         "provider": getattr(provider, "name", args.provider),
-    }, ensure_ascii=False, indent=2))
+    }
+    if args.preview:
+        response["preview"] = next(
+            (step.result for step in task.steps if step.id == "draft"),
+            None,
+        )
+    print(json.dumps(response, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

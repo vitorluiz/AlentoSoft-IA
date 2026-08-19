@@ -7,6 +7,29 @@ from typing import Any, Dict
 from .core import Task
 
 
+QUALITY_HINTS = {
+    "apairar": "Possível erro ortográfico: considere revisar para 'apoiar'.",
+    "publicar-mos": "Possível separação incorreta de palavras: revise a forma verbal.",
+    "familias conforme": "Verifique acentuação e concordância na expressão sobre famílias.",
+}
+
+
+def _quality_warnings(result: Dict[str, Any]) -> list[str]:
+    """Gera alertas simples de revisão; nunca transforma aviso em bloqueio."""
+    warnings: list[str] = []
+    for item in result.get("items", []):
+        if not isinstance(item, dict):
+            continue
+        item_id = item.get("id", "?")
+        text = " ".join(
+            str(item.get(field, "")) for field in ("title", "copy", "cta")
+        ).lower()
+        for fragment, warning in QUALITY_HINTS.items():
+            if fragment in text:
+                warnings.append(f"Item {item_id}: {warning}")
+    return warnings
+
+
 MARKETING_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -112,4 +135,5 @@ class MarketingSkill:
         result = self.provider.chat_json(messages, MARKETING_SCHEMA)
         result["human_review_required"] = True
         result["status"] = "ready_for_review"
+        result["quality_warnings"] = _quality_warnings(result)
         return result

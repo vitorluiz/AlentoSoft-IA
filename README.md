@@ -84,6 +84,20 @@ PYTHONPATH=. python3 -m alento_soft_ia.main \\
 
 A saída contém canal, formato, título, texto, chamada para ação, fonte, evidência, riscos e `human_review_required`. A publicação automática em qualquer canal está bloqueada no MVP. Para uma máquina sem GPU, execute um canal por vez. Os limites padrão do Ollama são `OLLAMA_NUM_CTX=8192` e `OLLAMA_NUM_PREDICT=600`; podem ser reduzidos para acelerar o teste.
 
+Use `--preview` para visualizar o rascunho produzido sem aprovar a tarefa:
+
+```bash
+PYTHONPATH=. python3 -m alento_soft_ia.main \
+  --provider hybrid \
+  --domain marketing \
+  --channel instagram \
+  --goal "Criar um post educativo sobre acolhimento e orientação às famílias" \
+  --source-file examples/marketing/granjimmy_contexto_minimo.md \
+  --preview
+```
+
+O campo `preview` mostra o resultado da etapa de geração, enquanto o estado permanece `waiting_approval` quando a revisão é necessária. A opção não publica e não substitui a aprovação humana. O campo `output` somente é preenchido após `--approve` neste protótipo. Quando a verificação linguística identificar um padrão conhecido, o rascunho também poderá conter `quality_warnings`; esses avisos orientam a revisão e não alteram `blocked` nem liberam publicação.
+
 ## Roteamento híbrido local/cloud
 
 O AlentoSoft-IA pode usar um provider cloud para marketing institucional sem dados sensíveis e manter o Ollama local para clínica, prontuário, RH e financeiro. O modo `hybrid` é fail-closed: somente o domínio `marketing` pode ir para cloud e somente quando a fonte tiver um nome explicitamente autorizado. As fontes públicas de demonstração autorizadas por padrão são `granjimmy_contexto_marca.md` e `granjimmy_contexto_minimo.md`. O arquivo sensível `profissionais-granjimmy` não deve ser usado como fonte cloud nem entrar no repositório público.
