@@ -256,8 +256,11 @@ def build_marketing_context(
     approval_gates = _approval_gates(editorial_text, professional_text)
     approval_gates.update(_custom_group(editorial_task, "approval_gates"))
     goal = _label_value(editorial_text, "Objetivo")
+    editorial_id = _task_id(editorial_task)
     return {
-        "source_name": f"ClickUp task {_task_id(editorial_task)}",
+        "source_name": f"clickup://task/{editorial_id}",
+        "source_kind": "clickup_mcp",
+        "mcp_source_verified": True,
         "source_text": _safe_source_text(editorial_text),
         "channel": _channel_from_task(editorial_task),
         "institutional_metadata": institutional,

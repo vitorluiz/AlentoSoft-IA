@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any, Dict
 
 from .provider import OllamaProvider, OpenAICompatibleProvider
@@ -24,12 +25,20 @@ def _source_allowlist() -> set[str]:
 
 
 def _cloud_marketing_is_allowed(domain: str, context: Dict[str, Any]) -> bool:
-    """Permite somente fontes explicitamente registradas como públicas/autorizadas."""
+    """Permite somente fontes públicas ou tarefas ClickUp verificadas pelo agente."""
     if domain not in CLOUD_ALLOWED_DOMAINS:
         return False
     source_name = str(context.get("source_name", "")).strip()
     source_text = str(context.get("source_text", "")).strip()
-    return bool(source_text and source_name in _source_allowlist())
+    if not source_text:
+        return False
+    if source_name in _source_allowlist():
+        return True
+    return bool(
+        context.get("source_kind") == "clickup_mcp"
+        and context.get("mcp_source_verified") is True
+        and re.fullmatch(r"clickup://task/[A-Za-z0-9_-]+", source_name)
+    )
 
 
 def _require_cloud_marketing(domain: str, context: Dict[str, Any]) -> None:
@@ -66,7 +75,10 @@ def _build_openrouter(model: str | None = None) -> OpenAICompatibleProvider:
         api_key=os.getenv("OPENROUTER_API_KEY", ""),
         model=model or os.getenv("OPENROUTER_MODEL", ""),
         headers={
-            "HTTP-Referer": os.getenv("OPENROUTER_HTTP_REFERER", "https://github.com/vitorluiz/AlentoSoft-IA"),
+            "HTTP-Referer": os.getenv(
+                "OPENROUTER_HTTP_REFERER",
+                "https://github.com/vitorluiz/AlentoSoft-IA",
+            ),
             "X-OpenRouter-Title": "AlentoSoft-IA",
         },
         require_api_key=True,
@@ -81,8 +93,10 @@ def build_provider(
 ):
     """Seleciona o provider e aplica a barreira de domínio antes da geração.
 
-    `hybrid` usa cloud somente para marketing com fonte allowlisted. Para todos os
-    outros domínios, inclusive clinical, retorna Ollama sem fazer chamada externa.
+    ``hybrid`` usa cloud somente para marketing com fonte pública allowlisted ou
+    tarefa ClickUp marcada pelo adaptador MCP como verificada e sanitizada. Para
+    todos os outros domínios, inclusive clinical, retorna Ollama sem chamada
+    externa.
     """
     if provider_name == "ollama":
         return OllamaProvider(model=model)

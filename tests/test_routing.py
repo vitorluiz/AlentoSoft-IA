@@ -49,6 +49,37 @@ class RoutingTests(unittest.TestCase):
         {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "test/model"},
         clear=False,
     )
+    def test_hybrid_routes_verified_clickup_mcp_to_openrouter(self):
+        context = {
+            "source_name": "clickup://task/86e2tbr2x",
+            "source_kind": "clickup_mcp",
+            "mcp_source_verified": True,
+            "source_text": "Briefing editorial sanitizado.",
+        }
+        provider = build_provider("hybrid", "marketing", context)
+        self.assertIsInstance(provider, OpenAICompatibleProvider)
+        self.assertEqual(provider.name, "openrouter")
+
+    @patch.dict(
+        os.environ,
+        {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "test/model"},
+        clear=False,
+    )
+    def test_unverified_clickup_source_does_not_use_cloud(self):
+        context = {
+            "source_name": "clickup://task/86e2tbr2x",
+            "source_kind": "clickup_mcp",
+            "mcp_source_verified": False,
+            "source_text": "Briefing editorial sanitizado.",
+        }
+        provider = build_provider("hybrid", "marketing", context)
+        self.assertIsInstance(provider, OllamaProvider)
+
+    @patch.dict(
+        os.environ,
+        {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "test/model"},
+        clear=False,
+    )
     def test_hybrid_routes_allowlisted_marketing_to_openrouter(self):
         provider = build_provider("hybrid", "marketing", self.context)
         self.assertIsInstance(provider, OpenAICompatibleProvider)
