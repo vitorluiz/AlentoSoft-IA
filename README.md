@@ -88,6 +88,26 @@ A skill também mantém campos separados para `institutional_metadata`, `public_
 
 O arquivo restrito de profissionais nunca deve ser enviado ao modelo cloud. A identificação profissional é aplicada localmente como controle e pode bloquear a tarefa quando estiver marcada para renderização sem validação documental e autorização.
 
+### Controles exportados do ClickUp
+
+Os campos `institutional_metadata`, `public_identification`, `render_plan` e `approval_gates` podem ser fornecidos por um ficheiro JSON local exportado ou preenchido a partir do ClickUp. O ficheiro deve ficar fora do repositório, ter permissões `600` e nunca deve conter credenciais de API. O exemplo público `examples/marketing/controles_clickup_exemplo.json` contém apenas campos vazios e não deve ser preenchido com dados reais dentro do Git.
+
+Exemplo de execução:
+
+```bash
+chmod 600 /home/ubuntu/.config/granjimmy-clickup-controls.json
+PYTHONPATH=. python3 -m alento_soft_ia.main \\
+  --provider hybrid \\
+  --domain marketing \\
+  --channel instagram \\
+  --goal "Criar preview de peça institucional" \\
+  --source-file examples/marketing/granjimmy_contexto_minimo.md \\
+  --controls-file /home/ubuntu/.config/granjimmy-clickup-controls.json \\
+  --preview
+```
+
+A CLI inclui os controles no contexto local da tarefa, mas o roteamento para OpenRouter recebe somente `source_name` e `source_text`. Assim, `public_identification` e os dados institucionais não são enviados ao provider cloud. O resultado de preview mostra `controls_loaded: true` e mantém copy, metadados, plano de renderização e portões de aprovação em campos separados.
+
 Use `--preview` para visualizar o rascunho produzido sem aprovar a tarefa:
 
 ```bash

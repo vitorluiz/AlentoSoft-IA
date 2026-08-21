@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
 import time
 from pathlib import Path
 
@@ -29,6 +30,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace", default="workspaces/demo")
     parser.add_argument("--source-file", type=Path, help="Documento autorizado usado como fonte da skill")
     parser.add_argument(
+        "--controls-file",
+        type=Path,
+        help=(
+            "JSON local exportado do ClickUp com institutional_metadata, "
+            "public_identification, render_plan e approval_gates; nunca enviado ao provider cloud"
+        ),
+    )
+    parser.add_argument(
         "--channel",
         default="instagram",
         choices=["instagram", "whatsapp", "blog", "linkedin", "facebook", "youtube", "paid_ads"],
@@ -47,22 +56,65 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_local_controls(path: Path) -> dict:
+    """Carrega controles do ClickUp somente de ficheiro local protegido."""
+    if not path.is_file():
+        raise RuntimeError(f"Ficheiro de controles não encontrado: {path}")
+    mode = stat.S_IMODE(path.stat().st_mode)
+    if mode & 0o077:
+        raise RuntimeError(
+            f"Ficheiro de controles deve ser privado (chmod 600): {path}"
+        )
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"JSON de controles inválido: {path}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("O ficheiro de controles deve conter um objeto JSON.")
+    allowed = {
+        "institutional_metadata",
+        "public_identification",
+        "render_plan",
+        "approval_gates",
+    }
+    unknown = sorted(set(payload) - allowed)
+    if unknown:
+        raise RuntimeError(
+            "Campos não permitidos no ficheiro de controles: " + ", ".join(unknown)
+        )
+    return {key: payload[key] for key in allowed if key in payload}
+
+
 def main() -> None:
     args = build_parser().parse_args()
     root = Path(args.workspace)
     root.mkdir(parents=True, exist_ok=True)
     audit = AuditLog(root / "audit.sqlite3")
     skill = internal_policy_checklist
-    context = {}
+    context = {"channel": args.channel}
     if args.source_file:
-        context = {
-            "source_name": args.source_file.name,
-            "source_text": args.source_file.read_text(encoding="utf-8"),
-            "channel": args.channel,
-        }
+        context.update(
+            {
+                "source_name": args.source_file.name,
+                "source_text": args.source_file.read_text(encoding="utf-8"),
+            }
+        )
+    controls_loaded = False
+    if args.controls_file:
+        context.update(_load_local_controls(args.controls_file))
+        controls_loaded = True
     provider = None
     if args.provider != "demo":
-        provider = build_provider(args.provider, args.domain, context, model=args.model)
+        routing_context = {
+            "source_name": context.get("source_name", ""),
+            "source_text": context.get("source_text", ""),
+        }
+        provider = build_provider(
+            args.provider,
+            args.domain,
+            routing_context,
+            model=args.model,
+        )
         skill = MarketingSkill(provider) if args.domain == "marketing" else LLMPolicySkill(provider)
     agent = AlentoAgent(audit_log=audit, skill=skill)
     task = agent.create_task(goal=args.goal, domain=args.domain, context=context)
@@ -87,6 +139,7 @@ def main() -> None:
         "errors": task.errors,
         "elapsed_seconds": elapsed_seconds,
         "provider": getattr(provider, "name", args.provider),
+        "controls_loaded": controls_loaded,
     }
     if args.preview:
         response["preview"] = next(

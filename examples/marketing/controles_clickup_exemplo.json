@@ -1,0 +1,42 @@
+{
+  "institutional_metadata": {
+    "service_name": "",
+    "service_availability": "",
+    "contact_phone": "",
+    "institution_name": "",
+    "cnes": "",
+    "sanitary_registration": "",
+    "source_reference": "cadastro institucional restrito",
+    "verified": false,
+    "verified_at": "",
+    "verified_by": ""
+  },
+  "public_identification": {
+    "status": "pending_validation",
+    "must_be_rendered": false,
+    "professional_id": "",
+    "name": "",
+    "role": "",
+    "council": "",
+    "crm": "",
+    "rqe": "",
+    "source_reference": "cadastro interno restrito",
+    "authorization_required": true,
+    "validation_required": true
+  },
+  "render_plan": {
+    "caption_metadata_fields": [],
+    "internal_only_metadata_fields": [
+      "source_reference",
+      "verified",
+      "verified_at",
+      "verified_by"
+    ]
+  },
+  "approval_gates": {
+    "clinical": "pending",
+    "institutional": "pending",
+    "marketing": "pending",
+    "public_identification": "pending"
+  }
+}
