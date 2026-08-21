@@ -120,6 +120,10 @@ class Validator:
             "risk_flags",
             "human_review_required",
             "status",
+            "institutional_metadata",
+            "public_identification",
+            "render_plan",
+            "approval_gates",
         }
         missing = sorted(required - set(result))
         if missing:
@@ -155,6 +159,26 @@ class Validator:
             errors.append("missing_information de marketing deve ser uma lista.")
         if not isinstance(result.get("risk_flags"), list):
             errors.append("risk_flags de marketing deve ser uma lista.")
+        if not isinstance(result.get("institutional_metadata"), dict):
+            errors.append("institutional_metadata deve ser um objeto separado da copy.")
+        if not isinstance(result.get("public_identification"), dict):
+            errors.append("public_identification deve ser um objeto de controle separado da copy.")
+        if not isinstance(result.get("render_plan"), dict):
+            errors.append("render_plan deve ser um objeto de controle do designer.")
+        if not isinstance(result.get("approval_gates"), dict):
+            errors.append("approval_gates deve ser um objeto de aprovação separado da copy.")
+        public_identification = result.get("public_identification", {})
+        if isinstance(public_identification, dict) and public_identification.get("must_be_rendered"):
+            if public_identification.get("status") != "validated":
+                errors.append("Identificação profissional marcada para renderização exige validação documental.")
+            if public_identification.get("authorization_required") is not True:
+                errors.append("Identificação profissional exige autorização explícita antes do uso público.")
+        render_plan = result.get("render_plan", {})
+        metadata = result.get("institutional_metadata", {})
+        if isinstance(render_plan, dict) and isinstance(metadata, dict):
+            caption_fields = render_plan.get("caption_metadata_fields", [])
+            if caption_fields and metadata.get("verified") is not True:
+                errors.append("Metadados institucionais destinados à legenda exigem verificação registrada.")
         if result.get("human_review_required") is not True:
             errors.append("Marketing exige human_review_required=true.")
         if result.get("status") != "ready_for_review":

@@ -82,7 +82,11 @@ PYTHONPATH=. python3 -m alento_soft_ia.main \\
   --source-file examples/marketing/granjimmy_contexto_marca.md
 ```
 
-A saída contém canal, formato, título, texto, chamada para ação, fonte, evidência, riscos e `human_review_required`. A publicação automática em qualquer canal está bloqueada no MVP. Para uma máquina sem GPU, execute um canal por vez. Os limites padrão do Ollama são `OLLAMA_NUM_CTX=8192` e `OLLAMA_NUM_PREDICT=600`; podem ser reduzidos para acelerar o teste.
+A saída contém canal, formato, título, copy, chamada para ação, fonte, evidência, riscos e `human_review_required`. A publicação automática em qualquer canal está bloqueada no MVP. Para uma máquina sem GPU, execute um canal por vez. Os limites padrão do Ollama são `OLLAMA_NUM_CTX=8192` e `OLLAMA_NUM_PREDICT=600`; podem ser reduzidos para acelerar o teste.
+
+A skill também mantém campos separados para `institutional_metadata`, `public_identification`, `render_plan` e `approval_gates`. A copy contém somente o texto candidato para a peça. Orientações como “PA Psiquiátrico 24 horas”, telefone, CNES e registro sanitário ficam em metadados institucionais; não são instruções de design e não entram automaticamente nos cards. O responsável técnico, CRM e RQE ficam em `public_identification`, com estado de validação e autorização. O designer não deve renderizar esses campos sem que o plano de renderização e os portões de aprovação autorizem expressamente o uso.
+
+O arquivo restrito de profissionais nunca deve ser enviado ao modelo cloud. A identificação profissional é aplicada localmente como controle e pode bloquear a tarefa quando estiver marcada para renderização sem validação documental e autorização.
 
 Use `--preview` para visualizar o rascunho produzido sem aprovar a tarefa:
 

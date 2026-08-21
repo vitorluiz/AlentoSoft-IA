@@ -80,6 +80,74 @@ class MarketingSkillTests(unittest.TestCase):
             task = agent.run(task)
             self.assertEqual(task.status, TaskStatus.WAITING_APPROVAL)
 
+    def test_marketing_contract_separates_metadata_and_public_identification(self):
+        result = self._result()
+        skill = MarketingSkill(FakeProvider(result))
+        task = AlentoAgent(AuditLog(Path(tempfile.mkdtemp()) / "audit.sqlite3"), skill).create_task(
+            "Criar carrossel educativo",
+            "marketing",
+            context={
+                "source_name": "clickup-approved-source",
+                "source_text": "Conteúdo educativo autorizado.",
+                "institutional_metadata": {
+                    "service_name": "PA Psiquiátrico",
+                    "service_availability": "24 horas",
+                    "contact_phone": "(65) 99688-5508",
+                    "institution_name": "Granjimmy Hospital Psiquiátrico",
+                    "cnes": "0552283",
+                    "sanitary_registration": "SES 6136.139299.2026",
+                    "source_reference": "cadastro institucional",
+                    "verified": True,
+                    "verified_at": "2026-08-20",
+                    "verified_by": "responsável institucional",
+                },
+                "public_identification": {
+                    "status": "validated",
+                    "must_be_rendered": True,
+                    "professional_id": "profissional-001",
+                    "name": "Profissional validado",
+                    "role": "Médico",
+                    "council": "CRM-MT",
+                    "crm": "0000",
+                    "rqe": "0000",
+                },
+                "render_plan": {
+                    "caption_metadata_fields": ["service_availability", "contact_phone"],
+                },
+            },
+        )
+        generated = skill(task)
+        self.assertNotIn("PA Psiquiátrico", generated["items"][0]["copy"])
+        self.assertEqual(generated["institutional_metadata"]["service_availability"], "24 horas")
+        self.assertEqual(generated["public_identification"]["name"], "Profissional validado")
+        self.assertIn("institutional_metadata", generated["render_plan"]["do_not_render_in_design"])
+        self.assertIn("public_identification", generated["render_plan"]["do_not_render_in_design"])
+
+        with tempfile.TemporaryDirectory() as directory:
+            agent = AlentoAgent(AuditLog(Path(directory) / "audit.sqlite3"), skill)
+            checked = agent.run(task)
+            self.assertEqual(checked.status, TaskStatus.WAITING_APPROVAL)
+
+    def test_public_identification_without_validation_fails_closed(self):
+        result = self._result()
+        skill = MarketingSkill(FakeProvider(result))
+        task = AlentoAgent(AuditLog(Path(tempfile.mkdtemp()) / "audit.sqlite3"), skill).create_task(
+            "Criar carrossel com porta-voz",
+            "marketing",
+            context={
+                "source_name": "marca",
+                "source_text": "Conteúdo institucional autorizado.",
+                "public_identification": {
+                    "status": "pending_validation",
+                    "must_be_rendered": True,
+                    "name": "Não validado",
+                },
+            },
+        )
+        checked = AlentoAgent(AuditLog(Path(tempfile.mkdtemp()) / "audit.sqlite3"), skill).run(task)
+        self.assertEqual(checked.status, TaskStatus.FAILED)
+        self.assertTrue(any("Identificação profissional" in error for error in checked.errors))
+
     def test_marketing_draft_waits_for_approval(self):
         skill = MarketingSkill(FakeProvider(self._result()))
         with tempfile.TemporaryDirectory() as directory:
