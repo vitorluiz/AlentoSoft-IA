@@ -88,25 +88,34 @@ A skill também mantém campos separados para `institutional_metadata`, `public_
 
 O arquivo restrito de profissionais nunca deve ser enviado ao modelo cloud. A identificação profissional é aplicada localmente como controle e pode bloquear a tarefa quando estiver marcada para renderização sem validação documental e autorização.
 
-### Controles exportados do ClickUp
+### Controles obtidos pelo MCP do ClickUp
 
-Os campos `institutional_metadata`, `public_identification`, `render_plan` e `approval_gates` podem ser fornecidos por um ficheiro JSON local exportado ou preenchido a partir do ClickUp. O ficheiro deve ficar fora do repositório, ter permissões `600` e nunca deve conter credenciais de API. O exemplo público `examples/marketing/controles_clickup_exemplo.json` contém apenas campos vazios e não deve ser preenchido com dados reais dentro do Git.
+O fluxo recomendado não usa JSON manual. O agente consulta o ClickUp através do MCP, localiza a tarefa editorial e lê, em modo somente leitura, a descrição e os campos personalizados. Quando necessário, consulta também a tarefa de validação do profissional e a fonte institucional canónica. O adaptador `alento_soft_ia.clickup_context` transforma esses resultados em contexto em memória para o `AlentoAgent`.
 
-Exemplo de execução:
+A fronteira de segurança é explícita: `source_text` contém somente o briefing editorial sanitizado; `institutional_metadata`, `public_identification`, `render_plan` e `approval_gates` ficam no contexto local. O provider cloud recebe apenas `source_name` e `source_text`, nunca o nome, CRM, RQE, autorização ou campos institucionais do ClickUp.
 
-```bash
-chmod 600 /home/ubuntu/.config/granjimmy-clickup-controls.json
-PYTHONPATH=. python3 -m alento_soft_ia.main \\
-  --provider hybrid \\
-  --domain marketing \\
-  --channel instagram \\
-  --goal "Criar preview de peça institucional" \\
-  --source-file examples/marketing/granjimmy_contexto_minimo.md \\
-  --controls-file /home/ubuntu/.config/granjimmy-clickup-controls.json \\
-  --preview
+Exemplo de integração no agente:
+
+```python
+from alento_soft_ia.clickup_context import build_marketing_context
+from alento_soft_ia.main import run_task
+
+context = build_marketing_context(
+    editorial_task=task_editorial_lida_pelo_mcp,
+    professional_task=task_profissional_lida_pelo_mcp,
+    institutional_task=task_institucional_lida_pelo_mcp,
+)
+
+result = run_task(
+    goal=context["clickup_goal"] or "Criar a peça editorial do ClickUp",
+    domain="marketing",
+    provider_name="hybrid",
+    context=context,
+    preview=True,
+)
 ```
 
-A CLI inclui os controles no contexto local da tarefa, mas o roteamento para OpenRouter recebe somente `source_name` e `source_text`. Assim, `public_identification` e os dados institucionais não são enviados ao provider cloud. O resultado de preview mostra `controls_loaded: true` e mantém copy, metadados, plano de renderização e portões de aprovação em campos separados.
+O agente deve consultar primeiro a tarefa editorial, depois a ficha profissional e, se existir, a fonte institucional. A integração não altera tarefas, comentários, status ou campos no ClickUp durante a geração. A aprovação humana continua obrigatória e nenhuma publicação automática é executada.
 
 Use `--preview` para visualizar o rascunho produzido sem aprovar a tarefa:
 
